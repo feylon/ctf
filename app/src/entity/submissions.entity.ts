@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { User } from "./user.entity";
 import { Challenge } from "./challenge.entity";
+import { Team } from "./team.entity";
 
 @Entity('submissions')
 export class Submission {
@@ -12,6 +13,9 @@ export class Submission {
 
   @ManyToOne(() => Challenge, (challenge) => challenge.submissions)
   challenge!: Challenge;
+
+  @ManyToOne(() => Team, (team) => team.submissions, { nullable: true, onDelete: 'CASCADE' })
+  team?: Team;
 
   @Column()
   isCorrect!: boolean;

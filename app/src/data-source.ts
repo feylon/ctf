@@ -1,7 +1,7 @@
 import { DataSource } from "typeorm";
 import { config } from "dotenv";
 
-config(); // .env ni o'qish uchun
+config(); 
 
 export const AppDataSource = new DataSource({
     type: "postgres",
@@ -10,7 +10,7 @@ export const AppDataSource = new DataSource({
     username: process.env.DB_USERNAME,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    entities: ["src/entity/**/*.entity.ts"], // .ts fayllarga to'g'ridan-to'g'ri yo'l
+    entities: ["src/entity/**/*.entity.ts"],
     migrations: ["src/migrations/**/*.ts"],
     synchronize: false,
     logging: true,

@@ -15,6 +15,9 @@ import { AuthModule } from './auth/auth.module';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { LoginHistory } from './entity/login-history.entity';
+import { AdminModule } from './admin/admin.module';
+import { Team } from './entity/team.entity';
+import { UserModule } from './user/user.module';
 
 @Module({
   imports: [
@@ -34,7 +37,7 @@ import { LoginHistory } from './entity/login-history.entity';
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: false, 
         synchronize: false,    
-        entities : [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory]
+        entities : [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, Team]
       }),
     }),
     CacheModule.registerAsync<RedisClientOptions>({
@@ -68,7 +71,7 @@ import { LoginHistory } from './entity/login-history.entity';
     },
   }),
 }),
-    AuthModule,
+    AuthModule, AdminModule, UserModule
   ],
   controllers: [AppController],
   providers: [AppService, JwtStrategy],

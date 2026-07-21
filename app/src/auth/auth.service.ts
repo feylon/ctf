@@ -117,7 +117,7 @@ export class AuthService {
 
         const access_token = this.jwtService.sign(payload, {
             secret: this.config.get<string>('JWT_SECRET'),
-            expiresIn: '15m',
+            expiresIn: '1d',
         });
 
         const refresh_token = this.jwtService.sign(payload, {
@@ -237,5 +237,19 @@ export class AuthService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
+
+
+    async checkUsername(username: string) {
+        const existingUser = await this.userRepo.findOne({
+            where: { username },
+            select: { id: true }, // Faqat ID ni olish tezroq ishlaydi
+        });
+
+        if (existingUser) {
+            return { available: false, message: 'Bu username allaqachon band' };
+        }
+
+        return { available: true, message: 'Bu username bo\'sh' };
     }
 }

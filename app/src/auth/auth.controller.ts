@@ -18,6 +18,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RefreshDto } from './dto/refresh.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { HistoryQueryDto } from './dto/history-query.dto';
+import { CheckUsernameDto } from './dto/check-username.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -148,4 +149,15 @@ export class AuthController {
     async getHistory(@Request() req, @Query() query: HistoryQueryDto) {
         return await this.authService.getLoginHistory(req.user.userId, query);
     }
+
+
+
+    // auth/auth.controller.ts
+
+@Post('check-username')
+@ApiOperation({ summary: 'Username band yoki band emasligini tekshirish' })
+@ApiResponse({ status: 200, description: 'Tekshiruv natijasi qaytariladi' })
+async checkUsername(@Body() dto: CheckUsernameDto) {
+  return await this.authService.checkUsername(dto.username);
+}
 }
