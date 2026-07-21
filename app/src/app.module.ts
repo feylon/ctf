@@ -31,7 +31,7 @@ import { FileEntity } from './entity/file.entity';
       envFilePath: ".env"
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'),
+      rootPath: join(__dirname, '..', 'uploads', ),
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],

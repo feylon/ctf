@@ -1,5 +1,9 @@
 // src/admin/file-manager.controller.ts
-import { Controller, Post, Get, Delete, Param, Body, Query, UseInterceptors, UploadedFile, Req, UseGuards } from '@nestjs/common';
+import { 
+  Controller, Post, Get, Delete, Param, Body, Query, 
+  UseInterceptors, UploadedFile, Req, UseGuards, 
+  ParseFilePipe, MaxFileSizeValidator, BadRequestException 
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileManagerService } from './file-manager.service';
@@ -35,7 +39,7 @@ export class FileManagerController {
   @Post('upload')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Maʼlum bir papkaga fayl yuklash va uning public URL manzilini olish' })
+  @ApiOperation({ summary: 'Maʼlum bir papkaga fayl yuklash (Maksimal hajm: 10 MB)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -44,7 +48,7 @@ export class FileManagerController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'Yuklanadigan fayl',
+          description: 'Yuklanadigan fayl (Maks: 10MB)',
         },
         folderId: {
           type: 'string',
@@ -56,7 +60,19 @@ export class FileManagerController {
     },
   })
   async uploadFile(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ 
+            maxSize: 10 * 1024 * 1024, // 10 MB baytlarda (10 * 1024 * 1024)
+            message: 'Fayl hajmi 10 MB dan oshmasligi kerak!',
+          }),
+        ],
+        // Agar fayl majburiy bo'lmasa true qilish mumkin, lekin upload uchun shart
+        fileIsRequired: true, 
+      }),
+    ) 
+    file: Express.Multer.File,
     @Body() dto: UploadFileDto,
     @Req() req: Request,
   ) {
