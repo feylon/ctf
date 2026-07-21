@@ -13,6 +13,9 @@ import * as bcrypt from 'bcrypt';
 import { CreateChallengeDto } from './dto/challenge.dto';
 import { Team } from 'src/entity/team.entity';
 import { Submission } from 'src/entity/submissions.entity';
+import { AdjustScoreDto } from './dto/adjust-score.dto';
+import { TournamentSettings } from 'src/entity/tournament-settings.entity';
+import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
 
 @Injectable()
 export class AdminService {
@@ -23,8 +26,9 @@ export class AdminService {
     @InjectRepository(Challenge) private readonly challengeRepo: Repository<Challenge>,
     @InjectRepository(Team) private readonly teamRepo: Repository<Team>,
     @InjectRepository(Submission) private readonly submissionRepo: Repository<Submission>,
+    @InjectRepository(TournamentSettings) private readonly tournamentSettingsRepo: Repository<TournamentSettings>,
 
-    // submissionRepo
+    // tournamentSettingsRepo
   ) { }
 
   async getAllUsers(query: GetUsersQueryDto) {
@@ -253,5 +257,113 @@ export class AdminService {
         submittedAt: 'DESC', // Eng oxirgi yuborilganlar birinchi chiqadi
       },
     });
+  }
+
+
+  // src/admin/admin.service.ts ichiga qo'shiladigan metod:
+
+  async adjustTeamScore(teamId: string, dto: AdjustScoreDto) {
+    const team = await this.teamRepo.findOne({
+      where: { id: teamId },
+      select: { id: true, name: true, score: true },
+    });
+
+    if (!team) {
+      throw new NotFoundException('Jamoa topilmadi');
+    }
+
+    // Ballni yangilaymiz (manfiy son bo'lsa kamayadi, musbat bo'lsa qo'shiladi)
+    team.score += dto.points;
+    
+    // Ball 0 dan past bo'lib ketishining oldini olish (ixtiyoriy)
+    if (team.score < 0) {
+      team.score = 0;
+    }
+
+    await this.teamRepo.save(team);
+
+    return {
+      success: true,
+      message: `"${team.name}" jamoasining balli o'zgartirildi. Joriy ball: ${team.score}`,
+      team: {
+        id: team.id,
+        name: team.name,
+        newScore: team.score,
+        reason: dto.reason,
+      },
+    };
+  }
+
+
+  // src/admin/admin.service.ts ichiga qo'shiladigan metodlar:
+
+  async toggleUserBan(userId: string) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: { id: true, username: true, isBanned: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Foydalanuvchi topilmadi');
+    }
+
+    user.isBanned = !user.isBanned;
+    await this.userRepo.save(user);
+
+    return {
+      success: true,
+      message: `Foydalanuvchi "${user.username}" ${user.isBanned ? 'bloklandi (banned)' : 'blokdan chiqarildi (unbanned)'}`,
+      isBanned: user.isBanned,
+    };
+  }
+
+  async toggleTeamBan(teamId: string) {
+    const team = await this.teamRepo.findOne({
+      where: { id: teamId },
+      select: { id: true, name: true, isBanned: true },
+    });
+
+    if (!team) {
+      throw new NotFoundException('Jamoa topilmadi');
+    }
+
+    team.isBanned = !team.isBanned;
+    await this.teamRepo.save(team);
+
+    return {
+      success: true,
+      message: `"${team.name}" jamoasi ${team.isBanned ? 'bloklandi (banned)' : 'blokdan chiqarildi (unbanned)'}`,
+      isBanned: team.isBanned,
+    };
+  }
+
+  // src/admin/admin.service.ts ichiga qo'shiladigan metodlar:
+
+  async getTournamentSettings() {
+    let settings = await this.tournamentSettingsRepo.findOne({ where: {} });
+    if (!settings) {
+      settings = this.tournamentSettingsRepo.create({ isLive: true });
+      await this.tournamentSettingsRepo.save(settings);
+    }
+    return settings;
+  }
+
+  async updateTournamentSettings(dto: UpdateTournamentSettingsDto) {
+    let settings = await this.tournamentSettingsRepo.findOne({ where: {} });
+    if (!settings) {
+      settings = this.tournamentSettingsRepo.create();
+    }
+
+    if (dto.isLive !== undefined) settings.isLive = dto.isLive;
+    if (dto.globalStartTime !== undefined) settings.globalStartTime = new Date(dto.globalStartTime);
+    if (dto.globalEndTime !== undefined) settings.globalEndTime = new Date(dto.globalEndTime);
+
+    await this.tournamentSettingsRepo.save(settings);
+
+    return {
+      success: true,
+      message: 'Musobaqa sozlamalari muvaffaqiyatli yangilandi',
+      settings,
+    };
   }
 }

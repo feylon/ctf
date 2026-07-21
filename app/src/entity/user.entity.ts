@@ -31,6 +31,10 @@ export class User {
   @Column({ type: 'enum', enum: Role, default: Role.USER })
   role!: Role;
 
+
+  @Column({ default: false })
+  isBanned!: boolean;
+
   @Column({ default: 0 })
   score!: number;
 
@@ -42,7 +46,7 @@ export class User {
   @OneToMany(() => Participation, (participation) => participation.user)
   participations!: Participation[];
 
-    // src/entity/user.entity.ts ichiga qo'shiladi:
+  // src/entity/user.entity.ts ichiga qo'shiladi:
   @ManyToOne(() => Team, (team) => team.members, { nullable: true, onDelete: 'SET NULL' })
   team?: Team
 

@@ -101,7 +101,13 @@ export class ChallengesService {
     }
 
     const teamId = user.team.id;
-
+    // User yoki Team ban qilinganligini tekshirish
+    if (user.isBanned) {
+      throw new ForbiddenException('Sizning profilingiz bloklangan!');
+    }
+    if (user.team?.isBanned) {
+      throw new ForbiddenException('Sizning jamoangiz bloklangan!');
+    }
     // 1. Vazifa va uning guruhini birga topamiz
     const challenge = await this.challengeRepo.findOne({
       where: { id: challengeId },

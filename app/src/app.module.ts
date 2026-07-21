@@ -18,6 +18,7 @@ import { LoginHistory } from './entity/login-history.entity';
 import { AdminModule } from './admin/admin.module';
 import { Team } from './entity/team.entity';
 import { UserModule } from './user/user.module';
+import { TournamentSettings } from './entity/tournament-settings.entity';
 
 @Module({
   imports: [
@@ -37,7 +38,7 @@ import { UserModule } from './user/user.module';
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: false, 
         synchronize: false,    
-        entities : [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, Team]
+        entities : [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, TournamentSettings, Team]
       }),
     }),
     CacheModule.registerAsync<RedisClientOptions>({

@@ -11,6 +11,8 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { CreateChallengeGroupDto, UpdateChallengeGroupDto } from './dto/challenge-group.dto';
 import { CreateChallengeDto } from './dto/challenge.dto';
+import { AdjustScoreDto } from './dto/adjust-score.dto';
+import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
 
 @Controller('admin') 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -149,4 +151,55 @@ export class AdminController {
   async getAllSubmissions() {
     return await this.adminService.getAllSubmissions();
   }
+
+
+  @ApiTags('Admin - Teams')
+    @Patch('teams/:id/score')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @ApiOperation({ summary: 'Jamoa ballarini qo‘lda o‘zgartirish (bonus yoki jarima)' })
+    async adjustTeamScore(
+        @Param('id') teamId: string,
+        @Body() dto: AdjustScoreDto,
+    ) {
+        return await this.adminService.adjustTeamScore(teamId, dto);
+    }
+
+
+
+
+    // src/admin/admin.controller.ts ichiga qo'shiladigan routelar:
+
+    @ApiTags('Admin - Moderation')
+    @Patch('users/:id/ban')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @ApiOperation({ summary: 'Foydalanuvchini bloklash yoki blokdan chiqarish' })
+    async toggleUserBan(@Param('id') userId: string) {
+        return await this.adminService.toggleUserBan(userId);
+    }
+
+    @ApiTags('Admin - Moderation')
+    @Patch('teams/:id/ban')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @ApiOperation({ summary: 'Jamoani bloklash yoki blokdan chiqarish' })
+    async toggleTeamBan(@Param('id') teamId: string) {
+        return await this.adminService.toggleTeamBan(teamId);
+    }
+
+
+
+    @ApiTags('Admin - Tournament Settings')
+    @Get('settings')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @ApiOperation({ summary: 'Musobaqa sozlamalarini ko‘rish' })
+    async getTournamentSettings() {
+        return await this.adminService.getTournamentSettings();
+    }
+
+    @ApiTags('Admin - Tournament Settings')
+    @Patch('settings')
+    @Roles(Role.ADMIN, Role.MODERATOR)
+    @ApiOperation({ summary: 'Musobaqa holati va vaqtlarini o‘zgartirish' })
+    async updateTournamentSettings(@Body() dto: UpdateTournamentSettingsDto) {
+        return await this.adminService.updateTournamentSettings(dto);
+    }
 }

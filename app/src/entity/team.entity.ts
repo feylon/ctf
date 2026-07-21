@@ -18,6 +18,10 @@ export class Team {
   @OneToMany(() => User, (user) => user.team)
   members!: User[];
 
+
+  @Column({ default: false })
+  isBanned!: boolean;
+
   @OneToMany(() => Submission, (submission) => submission.team)
   submissions!: Submission[]; // Qaysi jamoa qaysi submissionni yuborgani
 
@@ -28,6 +32,6 @@ export class Team {
   updatedAt!: Date;
 
   // src/entity/team.entity.ts ichiga qo'shiladi:
-@ManyToMany(() => ChallengeGroup, (group) => group.teams)
-challengeGroups!: ChallengeGroup[];
+  @ManyToMany(() => ChallengeGroup, (group) => group.teams)
+  challengeGroups!: ChallengeGroup[];
 }
