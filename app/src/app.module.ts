@@ -23,6 +23,11 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { Folder } from './entity/folder.entity';
 import { FileEntity } from './entity/file.entity';
+import { News } from './entity/news.entity';
+import { NewsModule } from './news/news.module';
+import { ProblemSubmission } from './entity/problem-submission.entity';
+import { Problem } from './entity/problem.entity';
+import { ProblemModule } from './problem/problem.module';
 
 @Module({
   imports: [
@@ -31,7 +36,7 @@ import { FileEntity } from './entity/file.entity';
       envFilePath: ".env"
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads', ),
+      rootPath: join(__dirname, '..', 'uploads',),
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -44,7 +49,7 @@ import { FileEntity } from './entity/file.entity';
         database: config.get<string>('DB_NAME'),
         autoLoadEntities: false,
         synchronize: false,
-        entities: [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, TournamentSettings, Team, FileEntity, Folder]
+        entities: [User, Challenge, News, ChallengeGroup, Submission, Participation, LoginHistory, TournamentSettings, Team, FileEntity, Folder, Problem, ProblemSubmission]
       }),
     }),
     CacheModule.registerAsync<RedisClientOptions>({
@@ -78,7 +83,7 @@ import { FileEntity } from './entity/file.entity';
         },
       }),
     }),
-    AuthModule, AdminModule, UserModule
+    AuthModule, AdminModule, UserModule, NewsModule, ProblemModule
   ],
   controllers: [AppController],
   providers: [AppService, JwtStrategy],

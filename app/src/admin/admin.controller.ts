@@ -1,5 +1,5 @@
 // src/admin/admin.controller.ts
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -13,24 +13,31 @@ import { CreateChallengeGroupDto, UpdateChallengeGroupDto } from './dto/challeng
 import { CreateChallengeDto } from './dto/challenge.dto';
 import { AdjustScoreDto } from './dto/adjust-score.dto';
 import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
+import { NewsService } from 'src/news/news.service';
+import { CreateNewsDto } from './dto/create-news.dto';
+import { UpdateNewsDto } from './dto/update-news.dto';
+import { CreateProblemDto } from './dto/create-problem.dto';
 
-@Controller('admin') 
+@Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly newsService: NewsService
+  ) { }
 
   // ==================== USERS MANAGEMENT ====================
 
   @ApiTags('Admin - Users')
   @Get('users')
-  @Roles(Role.ADMIN) 
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Barcha foydalanuvchilarni paginatsiya va qidirish orqali olish' })
   @ApiResponse({ status: 200, description: 'Foydalanuvchilar ro\'yxati va meta ma\'lumotlar' })
   async getUsers(@Query() query: GetUsersQueryDto) {
     return await this.adminService.getAllUsers(query);
   }
-  
+
   @ApiTags('Admin - Users')
   @Patch('users/:id/status')
   @Roles(Role.ADMIN)
@@ -98,8 +105,7 @@ export class AdminController {
     return await this.adminService.deleteGroup(id);
   }
 
-
-
+  // ==================== CHALLENGES MANAGEMENT ====================
 
   @ApiTags('Admin - Challenges')
   @Post('challenges')
@@ -125,6 +131,7 @@ export class AdminController {
     return await this.adminService.deleteChallenge(id);
   }
 
+  // ==================== TEAMS MANAGEMENT ====================
 
   @ApiTags('Admin - Teams')
   @Get('teams')
@@ -142,7 +149,26 @@ export class AdminController {
     return await this.adminService.deleteTeam(id);
   }
 
-  // src/admin/admin.controller.ts ichiga qo'shiladigan route:
+  @ApiTags('Admin - Teams')
+  @Patch('teams/:id/score')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Jamoa ballarini qo‘lda o‘zgartirish (bonus yoki jarima)' })
+  async adjustTeamScore(
+    @Param('id') teamId: string,
+    @Body() dto: AdjustScoreDto,
+  ) {
+    return await this.adminService.adjustTeamScore(teamId, dto);
+  }
+
+  @ApiTags('Admin - Teams')
+  @Patch('teams/:id/ban')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Jamoani bloklash yoki blokdan chiqarish' })
+  async toggleTeamBan(@Param('id') teamId: string) {
+    return await this.adminService.toggleTeamBan(teamId);
+  }
+
+  // ==================== SUBMISSIONS ====================
 
   @ApiTags('Admin - Submissions')
   @Get('submissions')
@@ -152,54 +178,79 @@ export class AdminController {
     return await this.adminService.getAllSubmissions();
   }
 
+  // ==================== MODERATION ====================
 
-  @ApiTags('Admin - Teams')
-    @Patch('teams/:id/score')
-    @Roles(Role.ADMIN, Role.MODERATOR)
-    @ApiOperation({ summary: 'Jamoa ballarini qo‘lda o‘zgartirish (bonus yoki jarima)' })
-    async adjustTeamScore(
-        @Param('id') teamId: string,
-        @Body() dto: AdjustScoreDto,
-    ) {
-        return await this.adminService.adjustTeamScore(teamId, dto);
-    }
+  @ApiTags('Admin - Moderation')
+  @Patch('users/:id/ban')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Foydalanuvchini bloklash yoki blokdan chiqarish' })
+  async toggleUserBan(@Param('id') userId: string) {
+    return await this.adminService.toggleUserBan(userId);
+  }
 
+  // ==================== TOURNAMENT SETTINGS ====================
 
+  @ApiTags('Admin - Tournament Settings')
+  @Get('settings')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Musobaqa sozlamalarini ko‘rish' })
+  async getTournamentSettings() {
+    return await this.adminService.getTournamentSettings();
+  }
 
+  @ApiTags('Admin - Tournament Settings')
+  @Patch('settings')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Musobaqa holati va vaqtlarini o‘zgartirish' })
+  async updateTournamentSettings(@Body() dto: UpdateTournamentSettingsDto) {
+    return await this.adminService.updateTournamentSettings(dto);
+  }
 
-    // src/admin/admin.controller.ts ichiga qo'shiladigan routelar:
+  // ==================== NEWS MANAGEMENT ====================
 
-    @ApiTags('Admin - Moderation')
-    @Patch('users/:id/ban')
-    @Roles(Role.ADMIN, Role.MODERATOR)
-    @ApiOperation({ summary: 'Foydalanuvchini bloklash yoki blokdan chiqarish' })
-    async toggleUserBan(@Param('id') userId: string) {
-        return await this.adminService.toggleUserBan(userId);
-    }
+  @ApiTags('Admin - News')
+  @Post('news')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Yangi e\'lon / yangilik qo\'shish' })
+  async createNews(@Body() dto: CreateNewsDto, @Req() req: any) {
+    return await this.newsService.createNews(dto, req.user.userId);
+  }
 
-    @ApiTags('Admin - Moderation')
-    @Patch('teams/:id/ban')
-    @Roles(Role.ADMIN, Role.MODERATOR)
-    @ApiOperation({ summary: 'Jamoani bloklash yoki blokdan chiqarish' })
-    async toggleTeamBan(@Param('id') teamId: string) {
-        return await this.adminService.toggleTeamBan(teamId);
-    }
+  @ApiTags('Admin - News')
+  @Patch('news/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Yangilikni tahrirlash' })
+  async updateNews(@Param('id') id: string, @Body() dto: UpdateNewsDto) {
+    return await this.newsService.updateNews(id, dto);
+  }
 
+  @ApiTags('ApiTags - News') // yoki Admin - News
+  @ApiTags('Admin - News')
+  @Delete('news/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Yangilikni o\'chirish' })
+  async deleteNews(@Param('id') id: string) {
+    return await this.newsService.deleteNews(id);
+  }
 
+  // ==================== PROBLEMS MANAGEMENT ====================
 
-    @ApiTags('Admin - Tournament Settings')
-    @Get('settings')
-    @Roles(Role.ADMIN, Role.MODERATOR)
-    @ApiOperation({ summary: 'Musobaqa sozlamalarini ko‘rish' })
-    async getTournamentSettings() {
-        return await this.adminService.getTournamentSettings();
-    }
+  @ApiTags('Admin - Problems')
+  @Post('problems')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Yangi masala (Problem) yaratish' })
+  async createProblem(@Body() dto: CreateProblemDto) {
+    return await this.adminService.createProblem(dto);
+  }
 
-    @ApiTags('Admin - Tournament Settings')
-    @Patch('settings')
-    @Roles(Role.ADMIN, Role.MODERATOR)
-    @ApiOperation({ summary: 'Musobaqa holati va vaqtlarini o‘zgartirish' })
-    async updateTournamentSettings(@Body() dto: UpdateTournamentSettingsDto) {
-        return await this.adminService.updateTournamentSettings(dto);
-    }
+  @ApiTags('Admin - Problems')
+  @Delete('problems/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Masalani (Problem) ID orqali o\'chirish' })
+  @ApiResponse({ status: 200, description: 'Masala muvaffaqiyatli o\'chirildi' })
+  @ApiResponse({ status: 400, description: 'Yaroqsiz ID formati (UUID kutilgan)' })
+  @ApiResponse({ status: 404, description: 'Masala topilmadi' })
+  async deleteProblem(@Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.deleteProblem(id);
+  }
 }

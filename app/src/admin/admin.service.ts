@@ -1,5 +1,5 @@
 // src/admin/admin.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entity/user.entity';
@@ -16,6 +16,8 @@ import { Submission } from 'src/entity/submissions.entity';
 import { AdjustScoreDto } from './dto/adjust-score.dto';
 import { TournamentSettings } from 'src/entity/tournament-settings.entity';
 import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
+import { Problem } from 'src/entity/problem.entity';
+import { CreateProblemDto } from './dto/create-problem.dto';
 
 @Injectable()
 export class AdminService {
@@ -27,6 +29,7 @@ export class AdminService {
     @InjectRepository(Team) private readonly teamRepo: Repository<Team>,
     @InjectRepository(Submission) private readonly submissionRepo: Repository<Submission>,
     @InjectRepository(TournamentSettings) private readonly tournamentSettingsRepo: Repository<TournamentSettings>,
+    @InjectRepository(Problem) private readonly problemRepo: Repository<Problem>,
 
     // tournamentSettingsRepo
   ) { }
@@ -366,4 +369,43 @@ export class AdminService {
       settings,
     };
   }
+  async createProblem(dto: CreateProblemDto) {
+    // Kod takrorlanmasligini tekshirish
+    const existingProblem = await this.problemRepo.findOne({ where: { code: dto.code } });
+    if (existingProblem) {
+      throw new BadRequestException('Bu tartib raqam (code) bilan masala allaqachon mavjud!');
+    }
+
+    // Flag (javob) ni xavfsizlik uchun hash qilamiz
+    const salt = await bcrypt.genSalt(10);
+    const flagHash = await bcrypt.hash(dto.flag, salt);
+
+    const problem = this.problemRepo.create({
+      code: dto.code,
+      title: dto.title,
+      description: dto.description,
+      flagHash: flagHash, // Hashlangan javobni beramiz
+      difficulty: dto.difficulty,
+      category: dto.category,
+      points: dto.points,
+      // rating, solvedCount, totalTries avtomat 0 bo'lib tushadi (default: 0)
+    });
+
+    return await this.problemRepo.save(problem);
+  }
+
+  async deleteProblem(id: string) {
+    const problem = await this.problemRepo.findOne({ where: { id } });
+    
+    if (!problem) {
+      throw new NotFoundException('O\'chirish uchun masala topilmadi!');
+    }
+
+    // Masalani o'chirish (Cascade tufayli uning submission'lari ham o'chib ketadi)
+    await this.problemRepo.delete(id);
+
+    return {
+      success: true,
+      message: 'Masala va unga bog\'liq barcha ma\'lumotlar muvaffaqiyatli o\'chirildi.',
+    };}
 }

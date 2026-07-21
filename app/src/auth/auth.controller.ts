@@ -19,6 +19,8 @@ import { RefreshDto } from './dto/refresh.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { HistoryQueryDto } from './dto/history-query.dto';
 import { CheckUsernameDto } from './dto/check-username.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -154,10 +156,27 @@ export class AuthController {
 
     // auth/auth.controller.ts
 
-@Post('check-username')
-@ApiOperation({ summary: 'Username band yoki band emasligini tekshirish' })
-@ApiResponse({ status: 200, description: 'Tekshiruv natijasi qaytariladi' })
-async checkUsername(@Body() dto: CheckUsernameDto) {
-  return await this.authService.checkUsername(dto.username);
-}
+    @Post('check-username')
+    @ApiOperation({ summary: 'Username band yoki band emasligini tekshirish' })
+    @ApiResponse({ status: 200, description: 'Tekshiruv natijasi qaytariladi' })
+    async checkUsername(@Body() dto: CheckUsernameDto) {
+        return await this.authService.checkUsername(dto.username);
+    }
+
+
+    @Post('forgot-password')
+    @ApiOperation({ summary: 'Parolni tiklash uchun OTP yuborish' })
+    @ApiResponse({ status: 201, description: 'Tiklash kodi emailga yuborildi' })
+    @ApiResponse({ status: 400, description: 'Email topilmadi' })
+    async forgotPassword(@Body() dto: ForgotPasswordDto) {
+        return await this.authService.forgotPassword(dto.email);
+    }
+
+    @Post('reset-password')
+    @ApiOperation({ summary: 'OTP kodni tasdiqlab, yangi parol o\'rnatish' })
+    @ApiResponse({ status: 200, description: 'Parol muvaffaqiyatli tiklandi' })
+    @ApiResponse({ status: 401, description: 'OTP xato yoki muddati tugagan' })
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return await this.authService.resetPassword(dto);
+    }
 }

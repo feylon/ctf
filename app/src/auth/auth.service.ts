@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginHistory } from 'src/entity/login-history.entity';
 import { HistoryQueryDto } from './dto/history-query.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -251,5 +252,57 @@ export class AuthService {
         }
 
         return { available: true, message: 'Bu username bo\'sh' };
+    }
+
+    // Parolni tiklash uchun OTP yuborish
+    async forgotPassword(email: string) {
+        // 1. User bazada mavjudligini tekshiramiz (Ro'yxatdan o'tishning aksi)
+        const user = await this.userRepo.findOne({ where: { email } });
+        if (!user) {
+            throw new BadRequestException('Bu email bilan ro‘yxatdan o‘tgan foydalanuvchi topilmadi');
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Redis'ga parolni tiklash uchun alohida kalit bilan 5 daqiqaga saqlaymiz
+        await this.cacheManager.set(`reset_otp_${email}`, otp, 300000);
+
+        await this.mailerService.sendMail({
+            to: email,
+            subject: 'CTF Platform Parolni Tiklash Kodi',
+            text: `Sizning parolni tiklash kodingiz: ${otp}. Kod 5 daqiqa davomida amal qiladi. Agar buni siz so'ramagan bo'lsangiz, e'tibor bermang.`,
+        });
+
+        return { message: 'Parolni tiklash kodi email manzilingizga yuborildi' };
+    }
+
+    // Parolni yangi kod bilan o'zgartirish
+    async resetPassword(dto: ResetPasswordDto) {
+        const { email, otp, newPassword } = dto;
+
+        // 1. Redis'dagi OTP'ni tekshiramiz
+        const savedOtp = await this.cacheManager.get(`reset_otp_${email}`);
+        if (!savedOtp || savedOtp !== otp) {
+            throw new UnauthorizedException('Tiklash kodi xato yoki muddati tugagan');
+        }
+
+        // 2. Userni topamiz
+        const user = await this.userRepo.findOne({ where: { email } });
+        if (!user) {
+            throw new BadRequestException('Foydalanuvchi topilmadi');
+        }
+
+        // 3. Yangi parolni hash qilib saqlaymiz
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        user.passwordHash = hashedPassword;
+        await this.userRepo.save(user);
+
+        // 4. OTP'ni o'chirib tashlaymiz
+        await this.cacheManager.del(`reset_otp_${email}`);
+
+        // Xavfsizlik uchun barcha faol sessiyalarni (refresh token) ham o'chirib yuborsak bo'ladi
+        await this.cacheManager.del(`refresh_token:${user.id}`);
+
+        return { message: 'Parol muvaffaqiyatli tiklandi. Endi yangi parol bilan kirishingiz mumkin' };
     }
 }
