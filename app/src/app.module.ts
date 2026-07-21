@@ -19,6 +19,10 @@ import { AdminModule } from './admin/admin.module';
 import { Team } from './entity/team.entity';
 import { UserModule } from './user/user.module';
 import { TournamentSettings } from './entity/tournament-settings.entity';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { Folder } from './entity/folder.entity';
+import { FileEntity } from './entity/file.entity';
 
 @Module({
   imports: [
@@ -26,7 +30,9 @@ import { TournamentSettings } from './entity/tournament-settings.entity';
       isGlobal: true,
       envFilePath: ".env"
     }),
-
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+    }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -36,20 +42,20 @@ import { TournamentSettings } from './entity/tournament-settings.entity';
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_NAME'),
-        autoLoadEntities: false, 
-        synchronize: false,    
-        entities : [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, TournamentSettings, Team]
+        autoLoadEntities: false,
+        synchronize: false,
+        entities: [User, Challenge, ChallengeGroup, Submission, Participation, LoginHistory, TournamentSettings, Team, FileEntity, Folder]
       }),
     }),
     CacheModule.registerAsync<RedisClientOptions>({
       isGlobal: true,
-      useFactory: async () : Promise<any> => {
+      useFactory: async (): Promise<any> => {
         const store = await redisStore({
           socket: {
             host: process.env.REDIS_HOST,
             port: Number(process.env.REDIS_PORT),
           },
-          ttl: 600000, 
+          ttl: 600000,
         });
         return {
           store: store as any,
@@ -57,21 +63,21 @@ import { TournamentSettings } from './entity/tournament-settings.entity';
       },
     }),
     MailerModule.forRootAsync({
-  inject: [ConfigService],
-  useFactory: (config: ConfigService) => ({
-    transport: {
-      host: config.get<string>('MAIL_HOST'),
-      port: config.get<number>('MAIL_PORT'),
-      auth: {
-        user: config.get<string>('MAIL_USER'),
-        pass: config.get<string>('MAIL_PASS'),
-      },
-    },
-    defaults: {
-      from: '"CTF Platform" <noreply@ctf.uz>',
-    },
-  }),
-}),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        transport: {
+          host: config.get<string>('MAIL_HOST'),
+          port: config.get<number>('MAIL_PORT'),
+          auth: {
+            user: config.get<string>('MAIL_USER'),
+            pass: config.get<string>('MAIL_PASS'),
+          },
+        },
+        defaults: {
+          from: '"CTF Platform" <noreply@ctf.uz>',
+        },
+      }),
+    }),
     AuthModule, AdminModule, UserModule
   ],
   controllers: [AppController],

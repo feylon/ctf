@@ -7,9 +7,10 @@ import { User } from '../entity/user.entity';
 import { Team } from '../entity/team.entity';
 import { ChallengesService } from './challenges.service';
 import { ChallengeGroup } from 'src/entity/challenge_groups.entity';
+import { TournamentSettings } from 'src/entity/tournament-settings.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Challenge, Submission, User, Team, ChallengeGroup])],
+  imports: [TypeOrmModule.forFeature([Challenge, Submission, User, Team, ChallengeGroup, TournamentSettings])],
   providers: [ChallengesService],
   exports: [ChallengesService],
 })

@@ -8,6 +8,7 @@ import { User } from '../entity/user.entity';
 import { Team } from '../entity/team.entity';
 import * as bcrypt from 'bcrypt';
 import { ChallengeGroup } from 'src/entity/challenge_groups.entity';
+import { TournamentSettings } from 'src/entity/tournament-settings.entity';
 
 @Injectable()
 export class ChallengesService {
@@ -17,6 +18,7 @@ export class ChallengesService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
     @InjectRepository(Team) private readonly teamRepo: Repository<Team>,
     @InjectRepository(ChallengeGroup) private readonly challengeGroupRepo: Repository<ChallengeGroup>,
+    @InjectRepository(TournamentSettings) private readonly tournamentSettingsRepo: Repository<TournamentSettings>,
     
   ) {}
 
@@ -107,6 +109,22 @@ export class ChallengesService {
     }
     if (user.team?.isBanned) {
       throw new ForbiddenException('Sizning jamoangiz bloklangan!');
+    }
+
+
+    // Global musobaqa sozlamalarini tekshiramiz
+    const settings = await this.tournamentSettingsRepo.findOne({ where: {} });
+    if (settings) {
+      if (!settings.isLive) {
+        throw new ForbiddenException('Musobaqa vaqtincha to‘xtatilgan!');
+      }
+      const now = new Date();
+      if (settings.globalStartTime && now < new Date(settings.globalStartTime)) {
+        throw new BadRequestException('Musobaqa hali boshlanmagan!');
+      }
+      if (settings.globalEndTime && now > new Date(settings.globalEndTime)) {
+        throw new BadRequestException('Musobaqa vaqti tugagan!');
+      }
     }
     // 1. Vazifa va uning guruhini birga topamiz
     const challenge = await this.challengeRepo.findOne({
