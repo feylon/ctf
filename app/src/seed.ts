@@ -1,7 +1,13 @@
 import { AppDataSource } from "./data-source";
 import { User } from "./entity/user.entity";
-import { Role } from "global/types";
+// import { Role } from "global/types";
 import * as bcrypt from "bcrypt";
+
+export enum Role {
+  USER = 'user',
+  ADMIN = 'admin',
+  MODERATOR = 'moderator',
+}
 
 async function seed() {
     // 1. Bazaga ulanish

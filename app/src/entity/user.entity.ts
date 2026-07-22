@@ -1,10 +1,16 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Submission } from "./submissions.entity";
-import { Role } from "global/types"; // Import yo'lini tekshirib oling
+// import { Role } from "global/types"; // Import yo'lini tekshirib oling
 import { Participation } from "./participations.entity";  // Participation ni import qiling
 import { LoginHistory } from "./login-history.entity";
-import { Team } from "./team.entity";
+import { Team } from "./team.entity";;
+// import { Role } from "../../global/types";
 
+export enum Role {
+  USER = 'user',
+  ADMIN = 'admin',
+  MODERATOR = 'moderator',
+}
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')

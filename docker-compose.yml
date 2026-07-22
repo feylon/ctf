@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ./app          # <-- app papkasini ko'rsatamiz
+      dockerfile: Dockerfile  # <-- app ichidagi Dockerfile
+    container_name: ctf_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - ./app/.env            # <-- .env fayl joylashgan yo'l
+    volumes:
+      - ./app/uploads:/usr/src/app/uploads
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - ctf-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ctf_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: cdtf_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ctf-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ctf_redis
+    restart: always
+    ports:
+      - "6381:6379"
+    networks:
+      - ctf-network
+
+volumes:
+  pgdata:
+
+networks:
+  ctf-network:
+    driver: bridge
