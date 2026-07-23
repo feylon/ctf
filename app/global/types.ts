@@ -1,5 +1,2 @@
-export enum Role {
-  USER = 'user',
-  ADMIN = 'admin',
-  MODERATOR = 'moderator',
-}
+// Role enum yagona manbadan (user.entity) qayta eksport qilinadi
+export { Role } from '../src/entity/user.entity';

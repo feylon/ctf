@@ -1,11 +1,19 @@
 // auth/auth.service.ts
-import { Injectable, UnauthorizedException, BadRequestException, Inject } from '@nestjs/common';
+import {
+    BadRequestException,
+    ForbiddenException,
+    Inject,
+    Injectable,
+    Logger,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { randomInt, randomUUID } from 'crypto';
 import { User } from '../entity/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -15,56 +23,133 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginHistory } from 'src/entity/login-history.entity';
 import { HistoryQueryDto } from './dto/history-query.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { JwtPayload } from 'src/common/types/auth-user';
+
+const OTP_TTL = 5 * 60 * 1000; // 5 daqiqa
+const OTP_RESEND_COOLDOWN = 60 * 1000; // qayta yuborish uchun 1 daqiqa kutish
+const OTP_MAX_ATTEMPTS = 5;
+const REFRESH_TTL = 7 * 24 * 60 * 60 * 1000; // 7 kun
+
+type OtpPurpose = 'register' | 'reset';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
+
     constructor(
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
         private mailerService: MailerService,
         @InjectRepository(User) private userRepo: Repository<User>,
         @InjectRepository(LoginHistory) private loginHistoryRepo: Repository<LoginHistory>,
-
         private jwtService: JwtService,
-        private readonly config: ConfigService
-
+        private readonly config: ConfigService,
     ) { }
 
+    // ==================== YORDAMCHI METODLAR ====================
+
     private async logLogin(userId: string | null, ip: string, status: 'success' | 'failed') {
-        // 1. Dastlabki obyektni yaratamiz (user dan tashqari)
-        const historyData: any = {
+        const history = this.loginHistoryRepo.create({
             ipAddress: ip,
-            status: status,
-            location: 'Tashkent'
-        };
-
-        // 2. Agar userId bo'lsa, user bog'lanishini qo'shamiz
-        if (userId) {
-            historyData.user = { id: userId };
-        }
-
-        // 3. TypeORM create metodiga uzatamiz
-        const history = this.loginHistoryRepo.create(historyData);
-
+            status,
+            user: userId ? ({ id: userId } as User) : undefined,
+        });
         await this.loginHistoryRepo.save(history);
     }
 
+    private otpKey(purpose: OtpPurpose, email: string) {
+        return purpose === 'register' ? `otp_${email}` : `reset_otp_${email}`;
+    }
 
+    // OTP yaratib, Redis'ga saqlaydi va emailga yuboradi
+    private async issueOtp(purpose: OtpPurpose, email: string, subject: string, text: (otp: string) => string) {
+        const cooldownKey = `${this.otpKey(purpose, email)}:cooldown`;
+        if (await this.cacheManager.get(cooldownKey)) {
+            throw new BadRequestException('Kod yaqinda yuborilgan. Iltimos, 1 daqiqadan so\'ng qayta urinib ko\'ring');
+        }
+
+        const otp = randomInt(100000, 1000000).toString();
+        await this.cacheManager.set(this.otpKey(purpose, email), { otp, attempts: 0 }, OTP_TTL);
+        await this.cacheManager.set(cooldownKey, true, OTP_RESEND_COOLDOWN);
+
+        try {
+            await this.mailerService.sendMail({ to: email, subject, text: text(otp) });
+        } catch (error) {
+            this.logger.error(`Email yuborilmadi (${email}): ${(error as Error).message}`);
+            await this.cacheManager.del(cooldownKey);
+            throw new BadRequestException('Email yuborishda xatolik yuz berdi. Keyinroq urinib ko\'ring');
+        }
+
+        if (this.config.get('NODE_ENV') !== 'production') {
+            this.logger.debug(`[DEV] ${purpose} OTP ${email}: ${otp}`);
+        }
+    }
+
+    // OTP ni tekshiradi. Noto'g'ri urinishlar soni cheklangan
+    private async verifyOtp(purpose: OtpPurpose, email: string, otp: string) {
+        const key = this.otpKey(purpose, email);
+        const saved = await this.cacheManager.get<{ otp: string; attempts: number }>(key);
+
+        if (!saved) {
+            throw new UnauthorizedException('Kod xato yoki muddati tugagan');
+        }
+
+        if (saved.otp !== otp) {
+            const attempts = saved.attempts + 1;
+            if (attempts >= OTP_MAX_ATTEMPTS) {
+                await this.cacheManager.del(key);
+                throw new UnauthorizedException('Urinishlar soni tugadi. Yangi kod so\'rang');
+            }
+            await this.cacheManager.set(key, { ...saved, attempts }, OTP_TTL);
+            throw new UnauthorizedException('Kod xato yoki muddati tugagan');
+        }
+
+        await this.cacheManager.del(key);
+    }
+
+    private async issueTokens(user: Pick<User, 'id' | 'username' | 'role'>) {
+        const payload: JwtPayload = { sub: user.id, username: user.username, role: user.role };
+
+        const access_token = this.jwtService.sign(payload, {
+            secret: this.config.getOrThrow<string>('JWT_SECRET'),
+            expiresIn: this.config.get('JWT_EXPIRES_IN', '15m'),
+        });
+
+        // jti har bir refresh tokenni noyob qiladi (rotatsiya to'g'ri ishlashi uchun)
+        const refresh_token = this.jwtService.sign({ ...payload, jti: randomUUID() }, {
+            secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+            expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN', '7d'),
+        });
+
+        await this.cacheManager.set(`refresh_token:${user.id}`, refresh_token, REFRESH_TTL);
+
+        return { access_token, refresh_token };
+    }
+
+    private assertCanLogin(user: Pick<User, 'isActive' | 'isDelete' | 'isBanned'>) {
+        if (user.isDelete) {
+            throw new UnauthorizedException('Login yoki parol noto\'g\'ri');
+        }
+        if (user.isBanned) {
+            throw new ForbiddenException('Hisobingiz bloklangan. Administratorga murojaat qiling');
+        }
+        if (!user.isActive) {
+            throw new ForbiddenException('Hisobingiz faol emas. Administratorga murojaat qiling');
+        }
+    }
+
+    // ==================== RO'YXATDAN O'TISH ====================
 
     async sendOtp(email: string) {
-        // User allaqachon bormi?
-        const existingUser = await this.userRepo.findOne({ where: { email } });
+        const existingUser = await this.userRepo.exists({ where: { email } });
         if (existingUser) throw new BadRequestException('Email allaqachon band');
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // Redis ga 5 daqiqaga saqlash
-        await this.cacheManager.set(`otp_${email}`, otp, 300000);
-
-        await this.mailerService.sendMail({
-            to: email,
-            subject: 'CTF Platform Tasdiqlash Kodingiz',
-            text: `Sizning tasdiqlash kodingiz: ${otp}. Kod 5 daqiqa davomida amal qiladi.`,
-        });
+        await this.issueOtp(
+            'register',
+            email,
+            'CTF Platform Tasdiqlash Kodingiz',
+            (otp) => `Sizning tasdiqlash kodingiz: ${otp}. Kod 5 daqiqa davomida amal qiladi.`,
+        );
 
         return { message: 'OTP email manzilingizga yuborildi' };
     }
@@ -72,131 +157,127 @@ export class AuthService {
     async register(dto: RegisterDto) {
         const { email, otp, password, fullName, username } = dto;
 
-        const savedOtp = await this.cacheManager.get(`otp_${email}`);
-        console.log(savedOtp)
-        if (!savedOtp || savedOtp !== otp) {
-            throw new UnauthorizedException('OTP xato yoki muddati tugagan');
+        if (await this.userRepo.exists({ where: { username } })) {
+            throw new BadRequestException('Bu username allaqachon band');
+        }
+        if (await this.userRepo.exists({ where: { email } })) {
+            throw new BadRequestException('Email allaqachon band');
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        await this.verifyOtp('register', email, otp);
 
         const newUser = this.userRepo.create({
             username,
             email,
-            passwordHash: hashedPassword,
-            fullName, // Entityingizga fullName qo'shganingizni tekshiring
+            passwordHash: await bcrypt.hash(password, 10),
+            fullName,
         });
-
         await this.userRepo.save(newUser);
-        await this.cacheManager.del(`otp_${email}`); // OTP ni ishlatgandan keyin o'chirish
 
         return { message: 'Ro\'yxatdan o\'tish muvaffaqiyatli yakunlandi' };
     }
 
-
-
-    // auth/auth.service.ts
+    // ==================== KIRISH / CHIQISH ====================
 
     async login(dto: LoginDto, ip: string) {
-        // 1. Userni topish
+        // Username yoki email orqali kirish mumkin
+        const login = dto.username.trim();
         const user = await this.userRepo.findOne({
-            where: { username: dto.username },
-            select: { id: true, username: true, role: true, passwordHash: true }
+            where: login.includes('@') ? { email: login.toLowerCase() } : { username: login },
+            select: {
+                id: true,
+                username: true,
+                fullName: true,
+                role: true,
+                passwordHash: true,
+                isActive: true,
+                isDelete: true,
+                isBanned: true,
+            },
         });
 
-        // Parol tekshiruvi
         const isPasswordValid = user ? await bcrypt.compare(dto.password, user.passwordHash) : false;
 
         if (!user || !isPasswordValid) {
-            // Muvaffaqiyatsiz urinishni loglash
-            await this.logLogin(null, ip, 'failed');
+            await this.logLogin(user?.id ?? null, ip, 'failed');
             throw new UnauthorizedException('Login yoki parol noto\'g\'ri');
         }
 
-        // 2. Tokenlarni yaratish
-        const payload = { sub: user.id, username: user.username, role: user.role };
+        this.assertCanLogin(user);
 
-        const access_token = this.jwtService.sign(payload, {
-            secret: this.config.get<string>('JWT_SECRET'),
-            expiresIn: '1d',
-        });
-
-        const refresh_token = this.jwtService.sign(payload, {
-            secret: this.config.get<string>('JWT_REFRESH_SECRET'),
-            expiresIn: '7d',
-        });
-
-        // 3. Refresh tokenni Redis ga saqlash (7 kun)
-        await this.cacheManager.set(`refresh_token:${user.id}`, refresh_token, 604800000);
-
-        // 4. Muvaffaqiyatli loginni loglash
+        const tokens = await this.issueTokens(user);
         await this.logLogin(user.id, ip, 'success');
 
         return {
-            access_token,
-            refresh_token,
-            user: { id: user.id, username: user.username, role: user.role }
+            ...tokens,
+            user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role },
         };
     }
 
-    async refresh(userId: string, oldRefreshToken: string) {
-        // 1. Redis dan tokenni tekshirish
-        const savedToken = await this.cacheManager.get(`refresh_token:${userId}`);
-
-        if (!savedToken || savedToken !== oldRefreshToken) {
+    async refresh(refreshToken: string) {
+        let payload: JwtPayload;
+        try {
+            payload = this.jwtService.verify<JwtPayload>(refreshToken, {
+                secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+            });
+        } catch {
             throw new UnauthorizedException('Yaroqsiz refresh token');
         }
 
-        // 2. Yangi access token yaratish
-        const user = await this.userRepo.findOneBy({ id: userId });
-        const payload = { sub: user!.id, username: user!.username, role: user!.role };
+        const savedToken = await this.cacheManager.get<string>(`refresh_token:${payload.sub}`);
+        if (!savedToken || savedToken !== refreshToken) {
+            throw new UnauthorizedException('Yaroqsiz refresh token');
+        }
 
-        const access_token = this.jwtService.sign(payload, {
-            secret: this.config.get<string>('JWT_SECRET'),
-            expiresIn: '15m',
+        const user = await this.userRepo.findOne({
+            where: { id: payload.sub },
+            select: { id: true, username: true, role: true, isActive: true, isDelete: true, isBanned: true },
         });
+        if (!user) {
+            throw new UnauthorizedException('Foydalanuvchi topilmadi');
+        }
+        this.assertCanLogin(user);
 
-        return { access_token };
+        // Refresh token rotatsiyasi: eski token endi yaroqsiz bo'ladi
+        return await this.issueTokens(user);
     }
 
     async logout(userId: string) {
-        // Redis dan o'chirish
         await this.cacheManager.del(`refresh_token:${userId}`);
         return { message: 'Tizimdan chiqdingiz' };
     }
 
+    // ==================== PROFIL ====================
 
     async changePassword(userId: string, dto: ChangePasswordDto) {
-        // 1. Userni bazadan topish (parol bilan birga)
         const user = await this.userRepo.findOne({
             where: { id: userId },
-            select: {
-                id: true,
-                passwordHash: true
-            }
+            select: { id: true, passwordHash: true },
         });
 
         if (!user) throw new UnauthorizedException('Foydalanuvchi topilmadi');
 
-        // 2. Eski parolni tekshirish
         const isMatch = await bcrypt.compare(dto.oldPassword, user.passwordHash);
         if (!isMatch) {
             throw new BadRequestException('Eski parol noto\'g\'ri');
         }
+        if (dto.oldPassword === dto.newPassword) {
+            throw new BadRequestException('Yangi parol eski paroldan farq qilishi kerak');
+        }
 
-        // 3. Yangi parolni hash qilish va saqlash
-        const newHashedPassword = await bcrypt.hash(dto.newPassword, 10);
-        user.passwordHash = newHashedPassword;
-
+        user.passwordHash = await bcrypt.hash(dto.newPassword, 10);
         await this.userRepo.save(user);
 
-        return { message: 'Parol muvaffaqiyatli yangilandi' };
-    }
+        // Boshqa qurilmalardagi sessiyalarni yopamiz
+        await this.cacheManager.del(`refresh_token:${userId}`);
 
+        return { message: 'Parol muvaffaqiyatli yangilandi. Qaytadan tizimga kiring' };
+    }
 
     async getInfo(userId: string) {
         const user = await this.userRepo.findOne({
             where: { id: userId },
+            relations: { team: true },
             select: {
                 id: true,
                 username: true,
@@ -205,7 +286,7 @@ export class AuthService {
                 role: true,
                 score: true,
                 createdAt: true,
-                // passwordHash ni kiritmaymiz, xavfsizlik uchun
+                team: { id: true, name: true, score: true },
             },
         });
 
@@ -215,15 +296,26 @@ export class AuthService {
 
         return user;
     }
+
+    async updateProfile(userId: string, dto: UpdateProfileDto) {
+        const user = await this.userRepo.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new UnauthorizedException('Foydalanuvchi topilmadi');
+        }
+
+        if (dto.fullName !== undefined) user.fullName = dto.fullName.trim();
+        await this.userRepo.save(user);
+
+        return this.getInfo(userId);
+    }
+
     async getLoginHistory(userId: string, query: HistoryQueryDto) {
         const page = query.page || 1;
-        const limit = query.limit || 10;
+        const limit = Math.min(query.limit || 10, 100);
         const skip = (page - 1) * limit;
-        // Repository orqali to'g'ridan-to'g'ri user ID ustunini filterlaymiz
+
         const [data, total] = await this.loginHistoryRepo.findAndCount({
-            where: {
-                user: { id: userId }
-            },
+            where: { user: { id: userId } },
             order: { createdAt: 'DESC' },
             skip,
             take: limit,
@@ -240,67 +332,49 @@ export class AuthService {
         };
     }
 
-
     async checkUsername(username: string) {
-        const existingUser = await this.userRepo.findOne({
-            where: { username },
-            select: { id: true }, // Faqat ID ni olish tezroq ishlaydi
-        });
+        const exists = await this.userRepo.exists({ where: { username } });
 
-        if (existingUser) {
+        if (exists) {
             return { available: false, message: 'Bu username allaqachon band' };
         }
 
         return { available: true, message: 'Bu username bo\'sh' };
     }
 
-    // Parolni tiklash uchun OTP yuborish
+    // ==================== PAROLNI TIKLASH ====================
+
     async forgotPassword(email: string) {
-        // 1. User bazada mavjudligini tekshiramiz (Ro'yxatdan o'tishning aksi)
-        const user = await this.userRepo.findOne({ where: { email } });
-        if (!user) {
-            throw new BadRequestException('Bu email bilan ro‘yxatdan o‘tgan foydalanuvchi topilmadi');
+        const user = await this.userRepo.findOne({ where: { email }, select: { id: true, isDelete: true } });
+
+        // Email mavjudligini oshkor qilmaslik uchun javob har doim bir xil
+        if (user && !user.isDelete) {
+            await this.issueOtp(
+                'reset',
+                email,
+                'CTF Platform Parolni Tiklash Kodi',
+                (otp) =>
+                    `Sizning parolni tiklash kodingiz: ${otp}. Kod 5 daqiqa davomida amal qiladi. Agar buni siz so'ramagan bo'lsangiz, e'tibor bermang.`,
+            );
         }
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // Redis'ga parolni tiklash uchun alohida kalit bilan 5 daqiqaga saqlaymiz
-        await this.cacheManager.set(`reset_otp_${email}`, otp, 300000);
-
-        await this.mailerService.sendMail({
-            to: email,
-            subject: 'CTF Platform Parolni Tiklash Kodi',
-            text: `Sizning parolni tiklash kodingiz: ${otp}. Kod 5 daqiqa davomida amal qiladi. Agar buni siz so'ramagan bo'lsangiz, e'tibor bermang.`,
-        });
-
-        return { message: 'Parolni tiklash kodi email manzilingizga yuborildi' };
+        return { message: 'Agar bu email ro\'yxatdan o\'tgan bo\'lsa, tiklash kodi yuborildi' };
     }
 
-    // Parolni yangi kod bilan o'zgartirish
     async resetPassword(dto: ResetPasswordDto) {
         const { email, otp, newPassword } = dto;
 
-        // 1. Redis'dagi OTP'ni tekshiramiz
-        const savedOtp = await this.cacheManager.get(`reset_otp_${email}`);
-        if (!savedOtp || savedOtp !== otp) {
-            throw new UnauthorizedException('Tiklash kodi xato yoki muddati tugagan');
-        }
+        await this.verifyOtp('reset', email, otp);
 
-        // 2. Userni topamiz
         const user = await this.userRepo.findOne({ where: { email } });
         if (!user) {
             throw new BadRequestException('Foydalanuvchi topilmadi');
         }
 
-        // 3. Yangi parolni hash qilib saqlaymiz
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        user.passwordHash = hashedPassword;
+        user.passwordHash = await bcrypt.hash(newPassword, 10);
         await this.userRepo.save(user);
 
-        // 4. OTP'ni o'chirib tashlaymiz
-        await this.cacheManager.del(`reset_otp_${email}`);
-
-        // Xavfsizlik uchun barcha faol sessiyalarni (refresh token) ham o'chirib yuborsak bo'ladi
+        // Xavfsizlik uchun barcha faol sessiyalarni yopamiz
         await this.cacheManager.del(`refresh_token:${user.id}`);
 
         return { message: 'Parol muvaffaqiyatli tiklandi. Endi yangi parol bilan kirishingiz mumkin' };

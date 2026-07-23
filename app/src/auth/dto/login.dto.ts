@@ -5,7 +5,7 @@ import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 export class LoginDto {
   @ApiProperty({
     example: faker.internet.username(),
-    description: 'Foydalanuvchi nomi',
+    description: 'Foydalanuvchi nomi yoki email',
   })
   @IsString()
   @IsNotEmpty()
