@@ -1,19 +1,9 @@
 // src/common/helpers/ip.helper.ts
 import { Request } from 'express';
+import { normalizeIp } from './ip-range.helper';
 
+// 'trust proxy' yoqilgan bo'lsa Express X-Forwarded-For ni o'zi xavfsiz tahlil qiladi
 export function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  
-  if (forwarded) {
-    // Agar bir nechta proxy'dan o'tgan bo'lsa, birinchi IP real clientniki bo'ladi
-    const ips = typeof forwarded === 'string' ? forwarded.split(',') : forwarded;
-    return ips[0].trim();
-  }
-
-  // To'g'ridan-to'g'ri kelgan so'rovlar uchun
-  return (
-    req.socket.remoteAddress ||
-    (req.connection as any).remoteAddress ||
-    '0.0.0.0'
-  );
+  const ip = req.ip || req.socket?.remoteAddress || '0.0.0.0';
+  return normalizeIp(ip);
 }

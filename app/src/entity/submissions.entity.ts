@@ -20,6 +20,10 @@ export class Submission {
   @Column()
   isCorrect!: boolean;
 
+  // Ushbu yechim uchun jamoaga berilgan ball (birinchi to'g'ri yechimda, aks holda 0)
+  @Column({ type: 'int', default: 0 })
+  pointsAwarded!: number;
+
   @CreateDateColumn({ type: "timestamptz" })
   submittedAt!: Date;
 
