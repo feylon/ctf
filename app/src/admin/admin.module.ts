@@ -14,13 +14,20 @@ import { FileManagerService } from './file-manager.service';
 import { FileEntity } from 'src/entity/file.entity';
 import { Folder } from 'src/entity/folder.entity';
 import { News } from 'src/entity/news.entity';
-import { NewsService } from 'src/news/news.service';
 import { Problem } from 'src/entity/problem.entity';
 import { ProblemSubmission } from 'src/entity/problem-submission.entity';
+import { LoginHistory } from 'src/entity/login-history.entity';
+import { NewsModule } from 'src/news/news.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, FileEntity, News,Folder,Problem, ProblemSubmission, ChallengeGroup, TournamentSettings , Submission, Challenge, Team])],
+  imports: [
+    TypeOrmModule.forFeature([
+      User, FileEntity, News, Folder, Problem, ProblemSubmission, ChallengeGroup,
+      TournamentSettings, Submission, Challenge, Team, LoginHistory,
+    ]),
+    NewsModule,
+  ],
   controllers: [AdminController, FileManagerController],
-  providers: [AdminService, FileManagerService, NewsService, ],
+  providers: [AdminService, FileManagerService],
 })
 export class AdminModule { }

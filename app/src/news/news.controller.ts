@@ -1,6 +1,6 @@
 // src/news/news.controller.ts
-import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { NewsService } from './news.service';
 import { NewsQueryDto } from './dto/news-query.dto';
 
@@ -28,7 +28,7 @@ export class NewsController {
   @ApiOperation({ summary: 'Bitta yangilikni ID orqali batafsil o\'qish (Public)' })
   @ApiResponse({ status: 200, description: 'Yangilik ma\'lumoti' })
   @ApiResponse({ status: 404, description: 'Yangilik topilmadi' })
-  async getNewsById(@Param('id') id: string) {
+  async getNewsById(@Param('id', ParseUUIDPipe) id: string) {
     return await this.newsService.getNewsById(id);
   }
 }

@@ -1,22 +1,24 @@
 // src/admin/admin.controller.ts
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
-import { GetUsersQueryDto } from './dto/get-users-query.dto';
-import { Role } from 'global/types';
+import { Role } from 'src/entity/user.entity';
+import { GetProblemsAdminQueryDto, GetSubmissionsQueryDto, GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { CreateChallengeGroupDto, UpdateChallengeGroupDto } from './dto/challenge-group.dto';
-import { CreateChallengeDto } from './dto/challenge.dto';
+import { CreateChallengeDto, UpdateChallengeDto } from './dto/challenge.dto';
 import { AdjustScoreDto } from './dto/adjust-score.dto';
 import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
 import { NewsService } from 'src/news/news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
-import { CreateProblemDto } from './dto/create-problem.dto';
+import { CreateProblemDto, UpdateProblemDto } from './dto/create-problem.dto';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import type { AuthUser } from 'src/common/types/auth-user';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,29 +26,48 @@ import { CreateProblemDto } from './dto/create-problem.dto';
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,
-    private readonly newsService: NewsService
+    private readonly newsService: NewsService,
   ) { }
+
+  // ==================== DASHBOARD ====================
+
+  @ApiTags('Admin - Dashboard')
+  @Get('stats')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Platforma bo‘yicha umumiy statistika' })
+  async getStats() {
+    return await this.adminService.getStats();
+  }
 
   // ==================== USERS MANAGEMENT ====================
 
   @ApiTags('Admin - Users')
   @Get('users')
-  @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Barcha foydalanuvchilarni paginatsiya va qidirish orqali olish' })
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Foydalanuvchilarni paginatsiya, qidiruv va filtrlar bilan olish' })
   @ApiResponse({ status: 200, description: 'Foydalanuvchilar ro\'yxati va meta ma\'lumotlar' })
   async getUsers(@Query() query: GetUsersQueryDto) {
     return await this.adminService.getAllUsers(query);
   }
 
   @ApiTags('Admin - Users')
+  @Get('users/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Foydalanuvchi haqida batafsil: login tarixi, yechimlar' })
+  async getUser(@Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.getUserDetail(id);
+  }
+
+  @ApiTags('Admin - Users')
   @Patch('users/:id/status')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Foydalanuvchini bloklash yoki faollashtirish' })
+  @ApiOperation({ summary: 'Foydalanuvchini faollashtirish yoki faolsizlantirish' })
   async updateUserStatus(
-    @Param('id') id: string,
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserStatusDto,
   ) {
-    return await this.adminService.updateUserStatus(id, dto);
+    return await this.adminService.updateUserStatus(actor.id, id, dto);
   }
 
   @ApiTags('Admin - Users')
@@ -54,18 +75,27 @@ export class AdminController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Foydalanuvchi rolini o\'zgartirish (user, moderator, admin)' })
   async updateUserRole(
-    @Param('id') id: string,
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateUserRoleDto,
   ) {
-    return await this.adminService.updateUserRole(id, dto);
+    return await this.adminService.updateUserRole(actor.id, id, dto);
   }
 
   @ApiTags('Admin - Users')
   @Delete('users/:id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Foydalanuvchini soft-delete qilish' })
-  async deleteUser(@Param('id') id: string) {
-    return await this.adminService.deleteUser(id);
+  async deleteUser(@CurrentUser() actor: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.deleteUser(actor.id, id);
+  }
+
+  @ApiTags('Admin - Users')
+  @Patch('users/:id/restore')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'O‘chirilgan foydalanuvchini qayta tiklash' })
+  async restoreUser(@Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.restoreUser(id);
   }
 
   // ==================== CHALLENGE GROUPS MANAGEMENT ====================
@@ -90,18 +120,15 @@ export class AdminController {
   @Put('groups/:id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Challenge guruhini tahrirlash' })
-  async updateGroup(
-    @Param('id') id: string,
-    @Body() dto: UpdateChallengeGroupDto,
-  ) {
+  async updateGroup(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateChallengeGroupDto) {
     return await this.adminService.updateGroup(id, dto);
   }
 
   @ApiTags('Admin - Challenge Groups')
   @Delete('groups/:id')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Challenge guruhini o\'chirish' })
-  async deleteGroup(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Challenge guruhini o\'chirish (ichida vazifa bo‘lmasa)' })
+  async deleteGroup(@Param('id', ParseUUIDPipe) id: string) {
     return await this.adminService.deleteGroup(id);
   }
 
@@ -118,16 +145,32 @@ export class AdminController {
   @ApiTags('Admin - Challenges')
   @Get('challenges')
   @Roles(Role.ADMIN, Role.MODERATOR)
-  @ApiOperation({ summary: 'Barcha Challenge larni olish' })
+  @ApiOperation({ summary: 'Barcha Challenge larni statistika bilan olish' })
   async getAllChallenges() {
     return await this.adminService.getAllChallenges();
   }
 
   @ApiTags('Admin - Challenges')
+  @Get('challenges/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Bitta Challenge ni olish' })
+  async getChallenge(@Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.getChallenge(id);
+  }
+
+  @ApiTags('Admin - Challenges')
+  @Patch('challenges/:id')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Challenge ni tahrirlash (flag berilsa qayta hashlanadi)' })
+  async updateChallenge(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateChallengeDto) {
+    return await this.adminService.updateChallenge(id, dto);
+  }
+
+  @ApiTags('Admin - Challenges')
   @Delete('challenges/:id')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Challenge ni o\'chirish' })
-  async deleteChallenge(@Param('id') id: string) {
+  @ApiOperation({ summary: 'Challenge ni o\'chirish (jamoa ballari qayta hisoblanadi)' })
+  async deleteChallenge(@Param('id', ParseUUIDPipe) id: string) {
     return await this.adminService.deleteChallenge(id);
   }
 
@@ -145,7 +188,7 @@ export class AdminController {
   @Delete('teams/:id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Jamoani o\'chirish va a\'zolarini bo\'shatish' })
-  async deleteTeam(@Param('id') id: string) {
+  async deleteTeam(@Param('id', ParseUUIDPipe) id: string) {
     return await this.adminService.deleteTeam(id);
   }
 
@@ -153,10 +196,7 @@ export class AdminController {
   @Patch('teams/:id/score')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Jamoa ballarini qo‘lda o‘zgartirish (bonus yoki jarima)' })
-  async adjustTeamScore(
-    @Param('id') teamId: string,
-    @Body() dto: AdjustScoreDto,
-  ) {
+  async adjustTeamScore(@Param('id', ParseUUIDPipe) teamId: string, @Body() dto: AdjustScoreDto) {
     return await this.adminService.adjustTeamScore(teamId, dto);
   }
 
@@ -164,7 +204,7 @@ export class AdminController {
   @Patch('teams/:id/ban')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Jamoani bloklash yoki blokdan chiqarish' })
-  async toggleTeamBan(@Param('id') teamId: string) {
+  async toggleTeamBan(@Param('id', ParseUUIDPipe) teamId: string) {
     return await this.adminService.toggleTeamBan(teamId);
   }
 
@@ -173,9 +213,9 @@ export class AdminController {
   @ApiTags('Admin - Submissions')
   @Get('submissions')
   @Roles(Role.ADMIN, Role.MODERATOR)
-  @ApiOperation({ summary: 'Barcha yuborilgan flaglar (submissions) tarixini ko‘rish' })
-  async getAllSubmissions() {
-    return await this.adminService.getAllSubmissions();
+  @ApiOperation({ summary: 'Yuborilgan flaglar tarixi (paginatsiya va filtrlar bilan)' })
+  async getAllSubmissions(@Query() query: GetSubmissionsQueryDto) {
+    return await this.adminService.getAllSubmissions(query);
   }
 
   // ==================== MODERATION ====================
@@ -184,8 +224,8 @@ export class AdminController {
   @Patch('users/:id/ban')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Foydalanuvchini bloklash yoki blokdan chiqarish' })
-  async toggleUserBan(@Param('id') userId: string) {
-    return await this.adminService.toggleUserBan(userId);
+  async toggleUserBan(@CurrentUser() actor: AuthUser, @Param('id', ParseUUIDPipe) userId: string) {
+    return await this.adminService.toggleUserBan(actor.id, userId);
   }
 
   // ==================== TOURNAMENT SETTINGS ====================
@@ -200,7 +240,7 @@ export class AdminController {
 
   @ApiTags('Admin - Tournament Settings')
   @Patch('settings')
-  @Roles(Role.ADMIN, Role.MODERATOR)
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Musobaqa holati va vaqtlarini o‘zgartirish' })
   async updateTournamentSettings(@Body() dto: UpdateTournamentSettingsDto) {
     return await this.adminService.updateTournamentSettings(dto);
@@ -212,28 +252,43 @@ export class AdminController {
   @Post('news')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Yangi e\'lon / yangilik qo\'shish' })
-  async createNews(@Body() dto: CreateNewsDto, @Req() req: any) {
-    return await this.newsService.createNews(dto, req.user.userId);
+  async createNews(@Body() dto: CreateNewsDto, @CurrentUser() user: AuthUser) {
+    return await this.newsService.createNews(dto, user.id);
   }
 
   @ApiTags('Admin - News')
   @Patch('news/:id')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Yangilikni tahrirlash' })
-  async updateNews(@Param('id') id: string, @Body() dto: UpdateNewsDto) {
+  async updateNews(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateNewsDto) {
     return await this.newsService.updateNews(id, dto);
   }
 
-  @ApiTags('ApiTags - News') // yoki Admin - News
   @ApiTags('Admin - News')
   @Delete('news/:id')
   @Roles(Role.ADMIN, Role.MODERATOR)
   @ApiOperation({ summary: 'Yangilikni o\'chirish' })
-  async deleteNews(@Param('id') id: string) {
+  async deleteNews(@Param('id', ParseUUIDPipe) id: string) {
     return await this.newsService.deleteNews(id);
   }
 
   // ==================== PROBLEMS MANAGEMENT ====================
+
+  @ApiTags('Admin - Problems')
+  @Get('problems')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Masalalar ro‘yxati (admin uchun)' })
+  async getAllProblems(@Query() query: GetProblemsAdminQueryDto) {
+    return await this.adminService.getAllProblems(query);
+  }
+
+  @ApiTags('Admin - Problems')
+  @Get('problems/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Bitta masalani olish' })
+  async getProblem(@Param('id', ParseUUIDPipe) id: string) {
+    return await this.adminService.getProblem(id);
+  }
 
   @ApiTags('Admin - Problems')
   @Post('problems')
@@ -241,6 +296,14 @@ export class AdminController {
   @ApiOperation({ summary: 'Yangi masala (Problem) yaratish' })
   async createProblem(@Body() dto: CreateProblemDto) {
     return await this.adminService.createProblem(dto);
+  }
+
+  @ApiTags('Admin - Problems')
+  @Patch('problems/:id')
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @ApiOperation({ summary: 'Masalani tahrirlash (flag berilsa qayta hashlanadi)' })
+  async updateProblem(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateProblemDto) {
+    return await this.adminService.updateProblem(id, dto);
   }
 
   @ApiTags('Admin - Problems')

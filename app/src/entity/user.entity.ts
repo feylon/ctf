@@ -1,10 +1,8 @@
 import { Column, CreateDateColumn, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Submission } from "./submissions.entity";
-// import { Role } from "global/types"; // Import yo'lini tekshirib oling
-import { Participation } from "./participations.entity";  // Participation ni import qiling
+import { Participation } from "./participations.entity";
 import { LoginHistory } from "./login-history.entity";
-import { Team } from "./team.entity";;
-// import { Role } from "../../global/types";
+import { Team } from "./team.entity";
 
 export enum Role {
   USER = 'user',
@@ -52,7 +50,6 @@ export class User {
   @OneToMany(() => Participation, (participation) => participation.user)
   participations!: Participation[];
 
-  // src/entity/user.entity.ts ichiga qo'shiladi:
   @ManyToOne(() => Team, (team) => team.members, { nullable: true, onDelete: 'SET NULL' })
   team?: Team
 

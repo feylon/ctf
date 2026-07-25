@@ -63,7 +63,8 @@ export class NewsService {
       ...dto,
       authorId: userId,
     });
-    return await this.newsRepo.save(news);
+    const saved = await this.newsRepo.save(news);
+    return this.getNewsById(saved.id);
   }
 
   // 4. Yangilikni tahrirlash (Faqat Admin/Moderator)
@@ -74,7 +75,8 @@ export class NewsService {
     }
 
     Object.assign(news, dto);
-    return await this.newsRepo.save(news);
+    await this.newsRepo.save(news);
+    return this.getNewsById(id);
   }
 
   // 5. Yangilikni o'chirish (Faqat Admin/Moderator)

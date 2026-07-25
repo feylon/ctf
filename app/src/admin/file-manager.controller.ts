@@ -12,7 +12,7 @@ import { UploadFileDto } from './dto/upload-file.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/roles.guard'; 
 import { Roles } from 'src/auth/roles.decorator';
-import { Role } from 'global/types'; 
+import { Role } from 'src/entity/user.entity'; 
 import type { Request } from 'express';
 
 @ApiTags('Admin - File & Folder Manager')
