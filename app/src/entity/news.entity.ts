@@ -20,6 +20,6 @@ export class News {
   @Column({ nullable: true })
   authorId!: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

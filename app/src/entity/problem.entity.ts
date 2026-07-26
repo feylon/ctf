@@ -37,9 +37,9 @@ export class Problem {
   @Column({ type: 'int', default: 0 })
   totalTries!: number; 
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt!: Date;
 }

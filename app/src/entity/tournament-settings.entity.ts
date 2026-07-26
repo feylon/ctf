@@ -15,6 +15,6 @@ export class TournamentSettings {
   @Column({ type: 'timestamptz', nullable: true })
   globalEndTime?: Date; // Global tugash vaqti
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt!: Date;
 }

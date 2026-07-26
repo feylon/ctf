@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, IsString } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -15,6 +15,7 @@ export class ProblemQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   limit?: number = 10;
 
   @ApiPropertyOptional({ example: 'A+B', description: 'Masala nomi yoki kodi bo\'yicha qidirish' })
@@ -26,4 +27,14 @@ export class ProblemQueryDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @ApiPropertyOptional({ enum: ['code', 'difficulty', 'points', 'solved'], default: 'code', description: 'Saralash maydoni' })
+  @IsOptional()
+  @IsIn(['code', 'difficulty', 'points', 'solved'])
+  sort?: 'code' | 'difficulty' | 'points' | 'solved';
+
+  @ApiPropertyOptional({ enum: ['ASC', 'DESC'], default: 'ASC' })
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
+  order?: 'ASC' | 'DESC';
 }

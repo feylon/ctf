@@ -26,6 +26,6 @@ export class ProblemSubmission {
   @Column({ type: 'varchar', length: 255, nullable: true })
   submittedAnswer!: string; 
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   submittedAt!: Date;
 }

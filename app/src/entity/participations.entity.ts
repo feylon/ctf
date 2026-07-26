@@ -13,6 +13,6 @@ export class Participation {
   @ManyToOne(() => ChallengeGroup, (group) => group.participants)
   group!: ChallengeGroup;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   joinedAt!: Date;
 }

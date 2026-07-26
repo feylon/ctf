@@ -35,6 +35,6 @@ export class FileEntity {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   uploadedBy?: User; // Kim yuklagani
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }

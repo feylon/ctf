@@ -26,6 +26,6 @@ export class Folder {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   createdBy?: User; // Kim yaratgani
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt!: Date;
 }
