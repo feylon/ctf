@@ -15,7 +15,8 @@ async function bootstrap() {
     app.set('trust proxy', 1);
   }
 
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  // API JSON qaytaradi, CSP esa Swagger UI ni buzadi, shuning uchun o'chirilgan
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
   const corsOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3001')
     .split(',')
@@ -47,8 +48,15 @@ async function bootstrap() {
   }
 
   // Yuklangan fayllar /uploads/... manzili orqali ochiq beriladi
+  // Brauzerda ochilib ketishi xavfli fayllar (html, svg va h.k.) faqat yuklab olinadi
+  const inlineSafe = /\.(png|jpe?g|gif|webp|pdf|txt)$/i;
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads',
+    setHeaders: (res, filePath) => {
+      if (!inlineSafe.test(filePath)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
   });
 
   app.enableShutdownHooks();

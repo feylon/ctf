@@ -1,130 +1,194 @@
 // src/admin/file-manager.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Folder } from '../entity/folder.entity';
 import { FileEntity } from '../entity/file.entity';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Request } from 'express';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class FileManagerService {
-  private readonly uploadDir = path.join(process.cwd(), 'uploads');
+  private readonly rootDir = process.cwd();
+  private readonly uploadDir = path.join(this.rootDir, 'uploads');
 
   constructor(
     @InjectRepository(Folder) private folderRepo: Repository<Folder>,
     @InjectRepository(FileEntity) private fileRepo: Repository<FileEntity>,
   ) {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
+    fs.mkdirSync(this.uploadDir, { recursive: true });
+  }
+
+  // Bazadagi nisbiy yo'l uploads papkasidan tashqariga chiqmasligini kafolatlaydi
+  private resolveSafe(relativePath: string) {
+    const absolute = path.resolve(this.rootDir, relativePath);
+    if (!absolute.startsWith(this.uploadDir + path.sep)) {
+      throw new BadRequestException('Yaroqsiz fayl yo\'li');
     }
+    return absolute;
+  }
+
+  private normalizeName(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === '.' || trimmed === '..' || /[\\/\0]/.test(trimmed)) {
+      throw new BadRequestException('Papka nomida / \\ belgilari bo\'lishi mumkin emas');
+    }
+    return trimmed;
+  }
+
+  private async findFolderOrFail(id: string) {
+    const folder = await this.folderRepo.findOne({ where: { id } });
+    if (!folder) throw new NotFoundException('Papka topilmadi');
+    return folder;
   }
 
   // --- PAPKALAR BILAN ISHLASH ---
 
   async createFolder(name: string, parentId?: string, userId?: string) {
-    let folderPath = this.uploadDir;
+    const folderName = this.normalizeName(name);
+    if (parentId) await this.findFolderOrFail(parentId);
 
-    // Agar ota papkasi bo'lsa, uning diskdagi yo'lini topib, ichida yangi papka ochamiz
-    if (parentId) {
-      const parentFolder = await this.folderRepo.findOne({ where: { id: parentId } });
-      if (parentFolder) {
-        // Papka nomlarini xavfsiz qilish uchun trim qilamiz
-        folderPath = path.join(process.cwd(), 'uploads', parentFolder.name, name);
-      } else {
-        folderPath = path.join(this.uploadDir, name);
-      }
-    } else {
-      folderPath = path.join(this.uploadDir, name);
-    }
+    const duplicate = await this.folderRepo.exists({
+      where: { name: folderName, parentId: parentId ? parentId : IsNull() },
+    });
+    if (duplicate) throw new BadRequestException('Bu nomdagi papka allaqachon mavjud');
 
-    // Diskda haqiqiy papka hosil qilamiz
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
-
+    // Papkalar faqat bazada saqlanadi; diskda fayllar papka ID si bo'yicha joylashadi
     const folder = this.folderRepo.create({
-      name,
+      name: folderName,
       parentId: parentId || undefined,
       createdBy: userId ? ({ id: userId } as any) : undefined,
     });
     return await this.folderRepo.save(folder);
   }
 
+  async renameFolder(id: string, name: string) {
+    const folder = await this.findFolderOrFail(id);
+    folder.name = this.normalizeName(name);
+    return await this.folderRepo.save(folder);
+  }
+
+  // Papka va uning barcha ichki papka/fayllarini o'chiradi
+  async deleteFolder(id: string) {
+    await this.findFolderOrFail(id);
+
+    const folderIds: string[] = [];
+    const queue = [id];
+    while (queue.length) {
+      const current = queue.shift()!;
+      folderIds.push(current);
+      const children = await this.folderRepo.find({ where: { parentId: current }, select: { id: true } });
+      queue.push(...children.map((c) => c.id));
+    }
+
+    let deletedFiles = 0;
+    for (const folderId of folderIds) {
+      const files = await this.fileRepo.find({ where: { folderId } });
+      for (const file of files) {
+        this.removeFromDisk(file.filePath);
+        deletedFiles++;
+      }
+      await this.fileRepo.remove(files);
+      fs.rmSync(path.join(this.uploadDir, 'files', folderId), { recursive: true, force: true });
+    }
+
+    // Ichki papkalar ON DELETE CASCADE orqali o'chadi
+    await this.folderRepo.delete(id);
+
+    return { success: true, message: `Papka o'chirildi (${folderIds.length} ta papka, ${deletedFiles} ta fayl)` };
+  }
+
+  private async getBreadcrumbs(folderId?: string) {
+    const crumbs: { id: string; name: string }[] = [];
+    let currentId = folderId;
+    // Cheksiz sikldan himoya
+    for (let depth = 0; currentId && depth < 50; depth++) {
+      const folder = await this.folderRepo.findOne({ where: { id: currentId }, select: { id: true, name: true, parentId: true } });
+      if (!folder) break;
+      crumbs.unshift({ id: folder.id, name: folder.name });
+      currentId = folder.parentId;
+    }
+    return crumbs;
+  }
+
   async getFoldersAndFiles(parentId?: string) {
+    if (parentId) await this.findFolderOrFail(parentId);
+
     const folders = await this.folderRepo.find({
-      where: { parentId: parentId || undefined },
-      order: { createdAt: 'DESC' },
+      where: { parentId: parentId ? parentId : IsNull() },
+      order: { name: 'ASC' },
     });
 
     const files = await this.fileRepo.find({
-      where: { folderId: parentId || undefined },
+      where: { folderId: parentId ? parentId : IsNull() },
       order: { createdAt: 'DESC' },
     });
 
     const checkedFiles = files.map((file) => {
-      const absolutePath = path.join(process.cwd(), file.filePath);
-      const existsOnDisk = fs.existsSync(absolutePath);
+      let existsOnDisk = false;
+      try {
+        existsOnDisk = fs.existsSync(this.resolveSafe(file.filePath));
+      } catch {
+        existsOnDisk = false;
+      }
       return {
         ...file,
+        size: Number(file.size),
         existsOnDisk,
         warning: !existsOnDisk ? 'Diqqat: Fayl bazada mavjud, lekin server diskidan o‘chib ketgan!' : null,
       };
     });
 
-    return { folders, files: checkedFiles };
+    return {
+      folders,
+      files: checkedFiles,
+      breadcrumbs: await this.getBreadcrumbs(parentId),
+    };
   }
 
   // --- FAYLLAR BILAN ISHLASH ---
 
-  async uploadFile(file: Express.Multer.File, req: Request, folderId?: string, userId?: string) {
+  async uploadFile(file: Express.Multer.File, folderId?: string, userId?: string) {
     if (!file) {
-      throw new NotFoundException('Fayl yuborilmadi');
+      throw new BadRequestException('Fayl yuborilmadi');
     }
+    if (folderId) await this.findFolderOrFail(folderId);
 
-    let targetDir = this.uploadDir;
-    let dbRelativeSubPath = 'uploads';
+    const subDir = path.join('uploads', 'files', folderId ?? 'root');
+    fs.mkdirSync(path.join(this.rootDir, subDir), { recursive: true });
 
-    // Agar fayl ma'lum bir papkaga yuklanayotgan bo'lsa, o'sha papka diskda borligini tekshiramiz
-    if (folderId) {
-      const folder = await this.folderRepo.findOne({ where: { id: folderId } });
-      if (folder) {
-        targetDir = path.join(this.uploadDir, folder.name);
-        dbRelativeSubPath = path.join('uploads', folder.name);
-        
-        if (!fs.existsSync(targetDir)) {
-          fs.mkdirSync(targetDir, { recursive: true });
-        }
-      }
-    }
+    // Kengaytma faqat xavfsiz belgilardan iborat bo'lishi kerak
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 10);
+    const uniqueName = `${Date.now()}-${randomBytes(6).toString('hex')}${ext}`;
+    const relativePath = path.posix.join(subDir.split(path.sep).join('/'), uniqueName);
 
-    const ext = path.extname(file.originalname);
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    
-    const relativePath = path.join(dbRelativeSubPath, uniqueName);
-    const absolutePath = path.join(targetDir, uniqueName);
-
-    // Faylni tegishli papkaga yozamiz
-    fs.writeFileSync(absolutePath, file.buffer);
-
-    const protocol = req.protocol;
-    const host = req.get('host');
-    // URL manzili to'g'ri shakllanishi uchun
-    const fileUrl = `${protocol}://${host}/${relativePath.replace(/\\/g, '/')}`;
+    fs.writeFileSync(this.resolveSafe(relativePath), file.buffer);
 
     const newFile = this.fileRepo.create({
-      originalName: file.originalname,
+      // Multer nomlarni latin1 sifatida o'qiydi, UTF-8 nomlarni tiklaymiz
+      originalName: Buffer.from(file.originalname, 'latin1').toString('utf8'),
       fileName: uniqueName,
-      filePath: relativePath.replace(/\\/g, '/'),
+      filePath: relativePath,
       mimetype: file.mimetype,
       size: file.size,
-      url: fileUrl,
+      // Domen proxy/frontendga bog'liq bo'lgani uchun nisbiy URL saqlanadi
+      url: `/${relativePath}`,
       folderId: folderId || undefined,
       uploadedBy: userId ? ({ id: userId } as any) : undefined,
     });
 
-    return await this.fileRepo.save(newFile);
+    const saved = await this.fileRepo.save(newFile);
+    return { ...saved, size: Number(saved.size) };
+  }
+
+  private removeFromDisk(relativePath: string) {
+    try {
+      const absolutePath = this.resolveSafe(relativePath);
+      if (fs.existsSync(absolutePath)) fs.unlinkSync(absolutePath);
+    } catch {
+      // Diskda yo'q yoki yo'li yaroqsiz fayl - bazadan o'chirish davom etaveradi
+    }
   }
 
   async deleteFile(fileId: string) {
@@ -133,11 +197,7 @@ export class FileManagerService {
       throw new NotFoundException('Fayl topilmadi');
     }
 
-    const absolutePath = path.join(process.cwd(), file.filePath);
-    if (fs.existsSync(absolutePath)) {
-      fs.unlinkSync(absolutePath);
-    }
-
+    this.removeFromDisk(file.filePath);
     await this.fileRepo.remove(file);
     return { success: true, message: 'Fayl bazadan va diskdan o‘chirildi' };
   }
