@@ -1,10 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { faker } from '@faker-js/faker';
 import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
-    example: faker.internet.username(),
+    example: 'ali_valiyev',
     description: 'Foydalanuvchi nomi yoki email',
   })
   @IsString()
@@ -12,7 +11,7 @@ export class LoginDto {
   username!: string;
 
   @ApiProperty({
-    example: faker.internet.password({ length: 10 }),
+    example: 'Parol12345',
     description: 'Parol',
     minLength: 6,
   })

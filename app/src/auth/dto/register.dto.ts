@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { faker } from '@faker-js/faker';
 import { Transform } from 'class-transformer';
 
 import {
@@ -14,7 +13,7 @@ import {
 
 export class RegisterDto {
   @ApiProperty({
-    example: faker.internet.username(),
+    example: 'ali_valiyev',
     description: 'Foydalanuvchining usernamei (3-32 belgi: harf, raqam, _ . -)',
   })
   @IsString()
@@ -24,7 +23,7 @@ export class RegisterDto {
   username!: string;
 
   @ApiProperty({
-    example: faker.person.fullName(),
+    example: 'Ali Valiyev',
     description: "Foydalanuvchining to'liq ismi",
   })
   @IsString()
@@ -33,7 +32,7 @@ export class RegisterDto {
   fullName!: string;
 
   @ApiProperty({
-    example: faker.internet.email(),
+    example: 'ali@example.com',
     description: 'Foydalanuvchining email manzili',
   })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
@@ -41,7 +40,7 @@ export class RegisterDto {
   email!: string;
 
   @ApiProperty({
-    example: faker.internet.password({ length: 10 }),
+    example: 'Parol12345',
     description: "Kamida 6 ta belgidan iborat parol",
     minLength: 6,
   })
@@ -51,7 +50,7 @@ export class RegisterDto {
   password!: string;
 
   @ApiProperty({
-    example: faker.string.numeric(6),
+    example: '123456',
     description: 'Emailga yuborilgan OTP kodi',
   })
   @IsString()
