@@ -1,0 +1,24 @@
+# Nuxt build natijalari
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Paketlar
+node_modules
+
+# Loglar
+logs
+*.log
+
+# Boshqalar
+.DS_Store
+.fleet
+.idea
+
+# Muhit o'zgaruvchilari
+.env
+.env.*
+!.env.example
