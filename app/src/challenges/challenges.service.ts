@@ -14,9 +14,9 @@ import { Challenge } from '../entity/challenge.entity';
 import { Submission } from '../entity/submissions.entity';
 import { User } from '../entity/user.entity';
 import { Team } from '../entity/team.entity';
-import { ChallengeGroup } from 'src/entity/challenge_groups.entity';
-import { TournamentSettings } from 'src/entity/tournament-settings.entity';
-import { isIpAllowed } from 'src/common/helpers/ip-range.helper';
+import { ChallengeGroup } from '../entity/challenge_groups.entity';
+import { TournamentSettings } from '../entity/tournament-settings.entity';
+import { isIpAllowed } from '../common/helpers/ip-range.helper';
 
 export type TournamentState = 'running' | 'paused' | 'not_started' | 'finished';
 

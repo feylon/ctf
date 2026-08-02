@@ -1,54 +1,90 @@
-version: '3.8'
+# CTF platformasi: PostgreSQL + Redis + NestJS API + Nuxt frontend
+# Ishga tushirish: cp .env.example .env && docker compose up -d --build
 
 services:
-  app:
-    build:
-      context: ./app          # <-- app papkasini ko'rsatamiz
-      dockerfile: Dockerfile  # <-- app ichidagi Dockerfile
-    container_name: ctf_app
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - ./app/.env            # <-- .env fayl joylashgan yo'l
-    volumes:
-      - ./app/uploads:/usr/src/app/uploads
-    depends_on:
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_started
-    networks:
-      - ctf-network
-
   postgres:
     image: postgres:15-alpine
     container_name: ctf_postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
-      POSTGRES_DB: cdtf_db
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD .env faylida berilishi kerak}
+      POSTGRES_DB: ${DB_NAME:-ctf_db}
     ports:
-      - "5435:5432"
+      - "127.0.0.1:${DB_EXTERNAL_PORT:-5435}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-ctf_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - ctf-network
 
   redis:
     image: redis:7-alpine
     container_name: ctf_redis
-    restart: always
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - ctf-network
+
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: ctf_api
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
-      - "6381:6379"
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - uploads:/usr/src/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ctf-network
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: ctf_web
+    restart: unless-stopped
+    environment:
+      # Brauzer API ga to'g'ridan-to'g'ri murojaat qiladi, shuning uchun tashqi manzil
+      NUXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:3000/api/v1}
+    ports:
+      - "${WEB_PORT:-3001}:3001"
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - ctf-network
 
 volumes:
   pgdata:
+  redisdata:
+  uploads:
 
 networks:
   ctf-network:

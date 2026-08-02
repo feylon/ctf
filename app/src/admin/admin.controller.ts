@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminService } from './admin.service';
-import { Role } from 'src/entity/user.entity';
+import { Role } from '../entity/user.entity';
 import { GetProblemsAdminQueryDto, GetSubmissionsQueryDto, GetUsersQueryDto } from './dto/get-users-query.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -13,12 +13,12 @@ import { CreateChallengeGroupDto, UpdateChallengeGroupDto } from './dto/challeng
 import { CreateChallengeDto, UpdateChallengeDto } from './dto/challenge.dto';
 import { AdjustScoreDto } from './dto/adjust-score.dto';
 import { UpdateTournamentSettingsDto } from './dto/tournament-settings.dto';
-import { NewsService } from 'src/news/news.service';
+import { NewsService } from '../news/news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { CreateProblemDto, UpdateProblemDto } from './dto/create-problem.dto';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import type { AuthUser } from 'src/common/types/auth-user';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/types/auth-user';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)

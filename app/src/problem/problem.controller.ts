@@ -5,10 +5,10 @@ import { ProblemService } from './problem.service';
 import { ProblemQueryDto } from './dto/problem-query.dto';
 import { SubmitProblemDto } from './dto/submit-problem.dto';
 import { LeaderboardQueryDto } from './dto/leaderboard-query.dto';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from 'src/auth/optional-jwt-auth.guard';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import type { AuthUser } from 'src/common/types/auth-user';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/types/auth-user';
 
 @ApiTags('Problems - Ochiq masalalar')
 @Controller('problems')

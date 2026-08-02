@@ -20,11 +20,11 @@ import { LoginDto } from './dto/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { LoginHistory } from 'src/entity/login-history.entity';
+import { LoginHistory } from '../entity/login-history.entity';
 import { HistoryQueryDto } from './dto/history-query.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { JwtPayload } from 'src/common/types/auth-user';
+import { JwtPayload } from '../common/types/auth-user';
 
 const OTP_TTL = 5 * 60 * 1000; // 5 daqiqa
 const OTP_RESEND_COOLDOWN = 60 * 1000; // qayta yuborish uchun 1 daqiqa kutish

@@ -9,12 +9,12 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nes
 import { FileManagerService } from './file-manager.service';
 import { CreateFolderDto, FolderQueryDto, RenameFolderDto } from './dto/create-folder.dto';
 import { UploadFileDto } from './dto/upload-file.dto';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { RolesGuard } from 'src/auth/roles.guard';
-import { Roles } from 'src/auth/roles.decorator';
-import { Role } from 'src/entity/user.entity';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import type { AuthUser } from 'src/common/types/auth-user';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '../entity/user.entity';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/types/auth-user';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 

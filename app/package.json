@@ -1,7 +1,7 @@
 {
   "name": "ctf",
   "version": "0.0.1",
-  "description": "",
+  "description": "CTF musobaqalari va algoritmik masalalar platformasi uchun NestJS backend",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -22,7 +22,11 @@
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migration:generate": "npm run typeorm -- migration:generate -d ./src/data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d ./src/data-source.ts",
-    "seed": "ts-node -r tsconfig-paths/register ./src/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register ./src/seed.ts",
+    "migration:create": "npm run typeorm -- migration:create",
+    "migration:revert": "npm run typeorm -- migration:revert -d ./src/data-source.ts",
+    "migration:run:prod": "typeorm migration:run -d dist/data-source.js",
+    "seed:prod": "node dist/seed.js"
   },
   "dependencies": {
     "@keyv/redis": "^5.1.6",
@@ -41,6 +45,7 @@
     "cache-manager": "^7.2.9",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "dotenv": "^18.0.5",
     "helmet": "^8.3.0",
     "keyv": "^5.6.0",
     "nodemailer": "^9.0.3",

@@ -13,7 +13,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { isValidIpRange } from 'src/common/helpers/ip-range.helper';
+import { isValidIpRange } from '../../common/helpers/ip-range.helper';
 
 @ValidatorConstraint({ name: 'ipRange' })
 class IpRangeConstraint implements ValidatorConstraintInterface {

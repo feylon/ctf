@@ -1,37 +1,33 @@
-# 1-bosqich: Build (Node 22 asosida)
-FROM node:22-alpine AS builder
+# 1-bosqich: Build (Node 24 asosida)
+FROM node:24-alpine AS builder
 
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-
-RUN npm install
+RUN npm ci
 
 COPY . .
+RUN npm run build && npm prune --omit=dev
 
-RUN npm run build
+# 2-bosqich: Production (faqat kerakli paketlar bilan)
+FROM node:24-alpine
 
-# 2-bosqich: Production (Node 22 asosida)
-FROM node:22-alpine
-
+ENV NODE_ENV=production
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-
-# Migratsiyalarni ishga tushirish uchun devDependencies (ts-node, typeorm cli va h.k.) kerak bo'ladi, 
-# shuning uchun faqat --only=production qilib qisqartirmaymiz yoki migration uchun kerakli paketlarni saqlaymiz.
-RUN npm install
-
+# Build bosqichida dev paketlardan tozalangan node_modules ko'chiriladi
+COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/dist ./dist
-COPY --from=builder /usr/src/app/src ./src
-COPY --from=builder /usr/src/app/tsconfig.json ./
 
-# Uploads papkasini yaratib qo'yamiz
-RUN mkdir -p uploads
+# Yuklangan fayllar uchun papka (docker-compose da volume ulanadi)
+RUN mkdir -p uploads && chown -R node:node /usr/src/app
+USER node
 
 EXPOSE 3000
 
-# Konteyner ko'tarilganda avval migratsiyani yurgizib, keyin ilovani start qilamiz
-# CMD ["sh", "-c", "npm run migration:run && node dist/main"]
-# CMD ["sh", "-c", "npm run migration:run && node dist/src/main"]
-CMD ["sh", "-c", "npm run migration:run && npm run seed && node dist/src/main"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/v1/health || exit 1
+
+# Konteyner ko'tarilganda avval migratsiya va seed, keyin ilova ishga tushadi
+CMD ["sh", "-c", "npm run migration:run:prod && npm run seed:prod && node dist/main"]

@@ -1,2 +1,0 @@
-    npm run migration:generate ./src/migrations/ProblemQushildi
-    npm run migration:run

@@ -2,7 +2,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
-import { Role } from 'src/entity/user.entity';
+import { Role } from '../../entity/user.entity';
 
 export class PaginationQueryDto {
   @ApiPropertyOptional({ default: 1, description: 'Sahifa raqami' })

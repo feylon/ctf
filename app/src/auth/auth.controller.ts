@@ -23,9 +23,9 @@ import { CheckUsernameDto } from './dto/check-username.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import type { AuthUser } from 'src/common/types/auth-user';
-import { getClientIp } from 'src/common/helpers/ip.helper';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthUser } from '../common/types/auth-user';
+import { getClientIp } from '../common/helpers/ip.helper';
 
 // Tashqi xizmatlarni (email) suiiste'mol qilishdan himoya: 1 daqiqada 5 ta so'rov
 const STRICT_THROTTLE = { default: { limit: 5, ttl: 60_000 } };

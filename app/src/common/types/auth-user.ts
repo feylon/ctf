@@ -1,4 +1,4 @@
-import { Role } from 'src/entity/user.entity';
+import { Role } from '../../entity/user.entity';
 
 // JWT orqali autentifikatsiyadan o'tgan foydalanuvchi (req.user)
 export interface AuthUser {
